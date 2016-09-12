@@ -5,29 +5,84 @@ import (
     "net"
     "time"
     "os"
+    "bufio"
     "io/ioutil"
+    "log"
     "golang.org/x/text/transform"
     "golang.org/x/text/encoding"
     "golang.org/x/text/encoding/japanese"
+    "golang.org/x/text/encoding/unicode"
 )
 
-func getWhoisServer(ip net.IP) string {
-    return "whois.nic.ad.jp"
+func getJpnicList(file string) (ipnets []*net.IPNet) {
+    fp, err := os.Open(file)
+    if err != nil {
+        log.Fatal(err)
+        return ipnets
+    }
+    defer fp.Close()
+
+    scanner := bufio.NewScanner(fp)
+    for scanner.Scan() {
+        cidr := scanner.Text()
+        _, ipnet, err := net.ParseCIDR(cidr)
+        if err != nil {
+            log.Fatal(err)
+            continue
+        }
+        ipnets = append(ipnets, ipnet)
+    }
+    return ipnets
 }
 
-func getWhoisCharset(ip net.IP) encoding.Encoding {
-    return japanese.ISO2022JP
+var ipnets = getJpnicList("whois/jpnic_list")
+
+func getWhoisServer(ip net.IP) (string, encoding.Encoding) {
+    for i := range ipnets {
+        if ipnets[i].Contains(ip) {
+            return "whois.nic.ad.jp", japanese.ISO2022JP
+        }
+    }
+    return "whois.apnic.net", unicode.UTF8
+}
+
+func getConnection(host string) net.Conn {
+    var conn net.Conn
+    var err error
+
+    for i := 1; i<6; i++ {
+        conn, err = net.Dial("tcp", host  + ":43")
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "connection failed...retrying\n")
+            time.Sleep(time.Duration(20 * i) * time.Second)
+            continue
+        }
+        break
+    }
+    checkError(err)
+    conn.SetDeadline(time.Now().Add(10 * time.Second))
+    return conn
 }
 
 func Whois(ip string) string {
     ipAddr := net.ParseIP(ip)
-    conn, err := net.Dial("tcp", getWhoisServer(ipAddr) + ":43")
-    checkError(err)
-    defer conn.Close()
+    host, charset := getWhoisServer(ipAddr)
+    var err error
+    var byteArray []byte
+    for i := 1; i<6; i++ {
+        conn := getConnection(host)
+        defer conn.Close()
 
-    conn.SetDeadline(time.Now().Add(10 * time.Second))
-    fmt.Fprintf(conn, ip + "\n")
-    byteArray, err := ioutil.ReadAll(transform.NewReader(conn,getWhoisCharset(ipAddr).NewDecoder()))
+        fmt.Fprintf(conn, ip + "\n")
+        byteArray, err = ioutil.ReadAll(transform.NewReader(conn,charset.NewDecoder()))
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "query failed...retrying\n")
+            conn.Close()
+            time.Sleep(time.Duration(20 * i) * time.Second)
+            continue
+        }
+        break
+    }
     checkError(err)
     contents := string(byteArray[:])
     return contents
