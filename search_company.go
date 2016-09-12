@@ -2,12 +2,15 @@ package main
 
 import (
     "os"
+    "runtime"
     "fmt"
     "flag"
     "bufio"
     "net"
     "regexp"
     "strings"
+    "golang.org/x/text/transform"
+    "golang.org/x/text/encoding/japanese"
     "./whois"
 )
 
@@ -59,6 +62,13 @@ func checkError(err error) {
     }
 }
 
+func getTransformWriter(file *os.File) *bufio.Writer {
+    if runtime.GOOS == "windows" {
+        return bufio.NewWriter(transform.NewWriter(file, japanese.ShiftJIS.NewEncoder()))
+    }
+    return bufio.NewWriter(file)
+}
+
 func main() {
     flag.Usage = func() {
         fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -73,9 +83,12 @@ func main() {
     out := flag.String("output", "output.csv", "output file path")
     flag.Parse()
 
+    stdout := getTransformWriter(os.Stdout)
+
     if len(flag.Args()) > 0 && isIP(flag.Args()[0]){
         ip := flag.Args()[0]
-        fmt.Println(ip + "," + getCompanyName(ip))
+        fmt.Fprintln(stdout, ip + "," + getCompanyName(ip))
+        stdout.Flush()
     } else if *in != "" {
         inFile, err := os.Open(*in)
         checkError(err)
@@ -85,14 +98,15 @@ func main() {
         defer outFile.Close()
 
         scanner := bufio.NewScanner(inFile)
-        writer := bufio.NewWriter(outFile)
+        writer := bufio.NewWriter(getTransformWriter(outFile))
         for scanner.Scan() {
             ip := scanner.Text()
             if isIP(ip) {
                 name := getCompanyName(ip)
                 fmt.Fprintln(writer, ip + "," + name)
-                fmt.Println(ip + "," + name)
+                fmt.Fprintln(stdout, ip + "," + name)
                 writer.Flush()
+                stdout.Flush()
             }
         }
         checkError(scanner.Err())
