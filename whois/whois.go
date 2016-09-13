@@ -8,6 +8,8 @@ import (
     "bufio"
     "io/ioutil"
     "log"
+    "bytes"
+    "../resources"
     "golang.org/x/text/transform"
     "golang.org/x/text/encoding"
     "golang.org/x/text/encoding/japanese"
@@ -15,14 +17,13 @@ import (
 )
 
 func getJpnicList(file string) (ipnets []*net.IPNet) {
-    fp, err := os.Open(file)
+    data, err := resources.Asset(file)
     if err != nil {
         log.Fatal(err)
         return ipnets
     }
-    defer fp.Close()
 
-    scanner := bufio.NewScanner(fp)
+    scanner := bufio.NewScanner(bytes.NewReader(data))
     for scanner.Scan() {
         cidr := scanner.Text()
         _, ipnet, err := net.ParseCIDR(cidr)
@@ -35,7 +36,7 @@ func getJpnicList(file string) (ipnets []*net.IPNet) {
     return ipnets
 }
 
-var ipnets = getJpnicList("whois/jpnic_list")
+var ipnets = getJpnicList("resources/jpnic_list")
 
 func getWhoisServer(ip net.IP) (string, encoding.Encoding) {
     for i := range ipnets {

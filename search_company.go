@@ -62,11 +62,11 @@ func checkError(err error) {
     }
 }
 
-func getTransformWriter(file *os.File) *bufio.Writer {
+func getTransformWriter(file *os.File) (writer *bufio.Writer, returnCode string) {
     if runtime.GOOS == "windows" {
-        return bufio.NewWriter(transform.NewWriter(file, japanese.ShiftJIS.NewEncoder()))
+        return bufio.NewWriter(transform.NewWriter(file, japanese.ShiftJIS.NewEncoder())), "\r\n"
     }
-    return bufio.NewWriter(file)
+    return bufio.NewWriter(file), "\n"
 }
 
 func main() {
@@ -83,12 +83,11 @@ func main() {
     out := flag.String("output", "output.csv", "output file path")
     flag.Parse()
 
-    stdout := getTransformWriter(os.Stdout)
+    stdout, _ := getTransformWriter(os.Stdout)
 
     if len(flag.Args()) > 0 && isIP(flag.Args()[0]){
         ip := flag.Args()[0]
-        fmt.Fprintln(stdout, ip + "," + getCompanyName(ip))
-        stdout.Flush()
+        fmt.Println(ip + "," + getCompanyName(ip))
     } else if *in != "" {
         inFile, err := os.Open(*in)
         checkError(err)
@@ -98,13 +97,13 @@ func main() {
         defer outFile.Close()
 
         scanner := bufio.NewScanner(inFile)
-        writer := bufio.NewWriter(getTransformWriter(outFile))
+        writer, returnCode := getTransformWriter(outFile)
         for scanner.Scan() {
             ip := scanner.Text()
             if isIP(ip) {
                 name := getCompanyName(ip)
-                fmt.Fprintln(writer, ip + "," + name)
-                fmt.Fprintln(stdout, ip + "," + name)
+                fmt.Fprint(writer, ip + "," + name + returnCode)
+                fmt.Println(ip + "," + getCompanyName(ip))
                 writer.Flush()
                 stdout.Flush()
             }
