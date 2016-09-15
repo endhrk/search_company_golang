@@ -106,6 +106,11 @@ func main() {
                 fmt.Println(ip + "," + getCompanyName(ip))
                 writer.Flush()
                 stdout.Flush()
+            } else {
+                fmt.Fprint(writer, ip + "," + returnCode)
+                fmt.Println(ip + ",")
+                writer.Flush()
+                stdout.Flush()
             }
         }
         checkError(scanner.Err())
