@@ -98,6 +98,5 @@ func checkError(err error) {
 
 func main() {
 
-    fmt.Println(Whois("221.249.116.206"))
-    fmt.Println(Whois("221.249.116.206"))
+    fmt.Println(Whois("8.8.8.8"))
 }
